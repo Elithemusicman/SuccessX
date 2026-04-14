@@ -330,6 +330,43 @@ body {
 }
 .del-btn:hover { color: #E24B4A; }
 
+/* ── Presets ── */
+.preset-row {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+}
+.preset-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px 5px 10px;
+  border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface2); font-size: 12px; font-weight: 500;
+  color: var(--text); cursor: pointer; transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.preset-chip:hover { border-color: var(--accent); color: var(--accent); }
+.preset-chip.active-preset { background: var(--accent); color: #fff; border-color: var(--accent); }
+.preset-chip .chip-x {
+  font-size: 11px; color: var(--hint); margin-left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.preset-chip .chip-x:hover { background: rgba(0,0,0,0.15); color: #fff; }
+.preset-section-label {
+  font-size: 10px; font-weight: 500; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 8px; margin-top: 4px;
+}
+.preset-manage-btn {
+  font-size: 12px; color: var(--accent); background: none;
+  border: none; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  padding: 0; font-weight: 500; margin-left: auto; display: block;
+}
+.reset-badge {
+  font-size: 10px; color: var(--green-txt); background: var(--green-bg);
+  padding: 2px 7px; border-radius: 8px; font-weight: 500;
+  margin-left: 6px; vertical-align: middle;
+}
+
 /* ── Nudge toast ── */
 .nudge {
   position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -498,16 +535,34 @@ input[type=file] { display: none; }
 
     <!-- Checklist -->
     <div class="card today-main">
-      <div class="card-title">Daily checklist</div>
+      <div style="display:flex;align-items:center;margin-bottom:12px;">
+        <div class="card-title" style="margin-bottom:0;">Daily checklist</div>
+        <span id="resetCountdown" class="reset-badge"></span>
+      </div>
+
+      <!-- Preset chips -->
+      <div id="presetChips" class="preset-row"></div>
+
+      <!-- Task list -->
       <div id="dailyList"></div>
-      <div class="add-row">
-        <input id="newTask" placeholder="Add task…" onkeydown="if(event.key==='Enter')addTask()">
-        <select id="newTaskType" title="Task type">
-          <option value="check">✓ Check</option>
-          <option value="qty">🔢 Count</option>
-        </select>
-        <input id="newTaskGoal" placeholder="Goal #" type="number" min="1" style="width:65px;flex:none;" title="Quantity goal">
-        <button onclick="addTask()">Add</button>
+
+      <!-- Add task row -->
+      <div style="border-top:1px solid var(--border2);margin-top:10px;padding-top:12px;">
+        <div class="add-row">
+          <input id="newTask" placeholder="Add task…" onkeydown="if(event.key==='Enter')addTask()">
+          <select id="newTaskType" title="Task type">
+            <option value="check">✓ Check</option>
+            <option value="qty">🔢 Count</option>
+          </select>
+          <input id="newTaskGoal" placeholder="Goal #" type="number" min="1" style="width:65px;flex:none;" title="Quantity goal">
+          <button onclick="addTask()">Add</button>
+        </div>
+        <!-- Save as preset -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+          <input id="presetName" placeholder="Save as preset…" style="flex:1;padding:7px 11px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')savePreset()">
+          <button onclick="savePreset()" style="padding:7px 12px;border-radius:9px;background:var(--surface2);color:var(--accent);border:1px solid var(--accent);font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Save preset</button>
+        </div>
+        <div style="font-size:11px;color:var(--hint);margin-top:5px;">Presets load all their tasks into today's checklist instantly.</div>
       </div>
     </div>
 
@@ -677,8 +732,39 @@ function today() { return new Date().toISOString().slice(0,10); }
 
 let pendingVisionImg = null;
 
+const DEFAULT_PRESETS = [
+  {
+    id: 1, name: 'Morning routine',
+    tasks: [
+      { text: 'Make bed', type: 'check' },
+      { text: 'Drink water', type: 'qty', goal: 1 },
+      { text: 'Meditate', type: 'check' },
+      { text: 'Journal', type: 'check' },
+    ]
+  },
+  {
+    id: 2, name: 'Health day',
+    tasks: [
+      { text: 'Workout', type: 'check' },
+      { text: 'Drink water', type: 'qty', goal: 8 },
+      { text: 'Walk 10,000 steps', type: 'check' },
+      { text: 'Sleep by 10pm', type: 'check' },
+    ]
+  },
+  {
+    id: 3, name: 'Deep work',
+    tasks: [
+      { text: 'No phone until noon', type: 'check' },
+      { text: 'Focus blocks (90 min)', type: 'qty', goal: 2 },
+      { text: 'Read 20 pages', type: 'check' },
+      { text: 'Review tomorrow plan', type: 'check' },
+    ]
+  },
+];
+
 let state = {
   tasks:    load('sx2_tasks', []),
+  presets:  load('sx2_presets', DEFAULT_PRESETS),
   goals:    load('sx2_goals', [
     { id: 1, text: 'Read Atomic Habits', type: 'w', done: false, visionId: null },
     { id: 2, text: 'Exercise 3x this week', type: 'w', done: false, visionId: null },
@@ -746,6 +832,10 @@ function init() {
     save('sx2_last_date', today());
   }
 
+  // 24-hour checklist reset
+  checkDailyReset();
+  startResetCountdown();
+
   // Review
   document.getElementById('reviewWorked').value = state.review.worked;
   document.getElementById('reviewAdjust').value = state.review.adjust;
@@ -756,6 +846,7 @@ function init() {
   updateNotifStatus();
 
   renderTasks();
+  renderPresets();
   renderGoals();
   renderDonts();
   renderVision();
@@ -1366,7 +1457,7 @@ function scheduleNotif() {
 function exportData() {
   const data = {
     tasks: state.tasks, goals: state.goals, donts: state.donts,
-    vision: state.vision, history: state.history,
+    vision: state.vision, history: state.history, presets: state.presets,
     identity: state.identity, review: state.review,
     exported: new Date().toISOString()
   };
@@ -1386,17 +1477,127 @@ function importData(evt) {
     try {
       const data = JSON.parse(e.target.result);
       if (data.tasks) { state.tasks = data.tasks; save('sx2_tasks', state.tasks); }
+      if (data.presets) { state.presets = data.presets; save('sx2_presets', state.presets); }
       if (data.goals) { state.goals = data.goals; save('sx2_goals', state.goals); }
       if (data.donts) { state.donts = data.donts; save('sx2_donts', state.donts); }
       if (data.vision) { state.vision = data.vision; save('sx2_vision', state.vision); }
       if (data.history) { state.history = data.history; save('sx2_history', state.history); }
       if (data.identity) { state.identity = data.identity; save('sx2_identity', state.identity); document.getElementById('identityInput').value = state.identity; }
       if (data.review) { state.review = data.review; save('sx2_review', state.review); }
-      renderTasks(); renderGoals(); renderDonts(); renderVision(); renderStats();
+      renderTasks(); renderPresets(); renderGoals(); renderDonts(); renderVision(); renderStats();
       showNudge('Data imported successfully! ✅');
     } catch(err) { showNudge('Import failed — check the file format.'); }
   };
   reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════
+//  PRESETS
+// ═══════════════════════════════════════════════
+function renderPresets() {
+  const el = document.getElementById('presetChips');
+  el.innerHTML = '';
+  if (!state.presets.length) return;
+  state.presets.forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'preset-chip';
+    chip.innerHTML = `<span onclick="loadPreset(${p.id})">📋 ${p.name}</span><span class="chip-x" onclick="deletePreset(${p.id})" title="Delete preset">✕</span>`;
+    el.appendChild(chip);
+  });
+}
+
+function loadPreset(id) {
+  const preset = state.presets.find(p => p.id === id);
+  if (!preset) return;
+  const d = today();
+  let added = 0;
+  preset.tasks.forEach(t => {
+    const already = state.tasks.some(ex => ex.text.toLowerCase() === t.text.toLowerCase());
+    if (!already) {
+      const newTask = { id: Date.now() + Math.random(), text: t.text, type: t.type, doneOn: null, addedDate: d };
+      if (t.type === 'qty') { newTask.goal = t.goal || 1; newTask.counts = {}; }
+      state.tasks.push(newTask);
+      added++;
+    }
+  });
+  save('sx2_tasks', state.tasks);
+  renderTasks();
+  showNudge(added > 0 ? `✅ Loaded "${preset.name}" — ${added} tasks added!` : `"${preset.name}" tasks already in your list`);
+}
+
+function savePreset() {
+  const inp = document.getElementById('presetName');
+  const name = inp.value.trim();
+  if (!name) { showNudge('Give your preset a name first'); return; }
+  if (!state.tasks.length) { showNudge('Add some tasks first, then save as preset'); return; }
+  const preset = {
+    id: Date.now(),
+    name,
+    tasks: state.tasks.map(t => {
+      const pt = { text: t.text, type: t.type };
+      if (t.type === 'qty') pt.goal = t.goal;
+      return pt;
+    })
+  };
+  state.presets.push(preset);
+  save('sx2_presets', state.presets);
+  inp.value = '';
+  renderPresets();
+  showNudge(`✅ Preset "${name}" saved with ${preset.tasks.length} tasks!`);
+}
+
+function deletePreset(id) {
+  state.presets = state.presets.filter(p => p.id !== id);
+  save('sx2_presets', state.presets);
+  renderPresets();
+}
+
+// ═══════════════════════════════════════════════
+//  24-HOUR RESET
+// ═══════════════════════════════════════════════
+function checkDailyReset() {
+  const lastReset = load('sx2_last_reset', null);
+  const d = today();
+  if (lastReset !== d) {
+    // Archive yesterday's completion to history before reset
+    if (lastReset) {
+      const done = state.tasks.filter(t => {
+        if (t.type === 'qty') return t.counts && t.counts[lastReset] >= t.goal;
+        return t.doneOn === lastReset;
+      }).length;
+      if (!state.history[lastReset]) state.history[lastReset] = {};
+      state.history[lastReset].done = done;
+      state.history[lastReset].total = state.tasks.length;
+      save('sx2_history', state.history);
+    }
+    // Reset all check completions (keep tasks, just clear done status)
+    state.tasks.forEach(t => {
+      if (t.type === 'check') t.doneOn = null;
+      // qty counts are keyed by date so they naturally reset — no action needed
+    });
+    save('sx2_tasks', state.tasks);
+    save('sx2_last_reset', d);
+    if (lastReset) showNudge('🌅 New day — checklist reset! Let\'s go.');
+  }
+}
+
+function startResetCountdown() {
+  function updateCountdown() {
+    const now = new Date();
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const ms = midnight - now;
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const el = document.getElementById('resetCountdown');
+    if (el) el.textContent = `resets in ${h}h ${m}m`;
+  }
+  updateCountdown();
+  setInterval(updateCountdown, 60000);
+  // Auto-reset at midnight without refresh
+  const now = new Date();
+  const midnight = new Date(); midnight.setHours(24, 0, 0, 0);
+  setTimeout(() => { checkDailyReset(); renderTasks(); startResetCountdown(); }, midnight - now);
 }
 
 // ═══════════════════════════════════════════════
